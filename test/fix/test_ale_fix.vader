@@ -11,6 +11,7 @@ Before:
   let g:ale_enabled = 0
   let g:ale_echo_cursor = 0
   let g:ale_run_synchronously = 1
+  unlet! g:ale_run_synchronously_callbacks
   let g:ale_set_lists_synchronously = 1
   let g:ale_fix_buffer_data = {}
   let g:ale_fixers = {
@@ -177,6 +178,7 @@ After:
   Restore
   unlet! g:ale_run_synchronously
   unlet! g:ale_set_lists_synchronously
+  unlet! g:ale_run_synchronously_callbacks
   unlet! g:ale_emulate_job_failure
   unlet! b:ale_fixers
   unlet! b:ale_fix_on_save
@@ -447,6 +449,7 @@ Execute(ALEFix should fix files on the save event):
 
   call SetUpLinters()
   call ale#events#SaveEvent(bufnr(''))
+  call ale#test#FlushJobs()
 
   " We should save the file.
   AssertEqual ['$a', '$b', '$c'], readfile('fix_test_file')
@@ -518,6 +521,7 @@ Execute(ALEFix should still lint with no linters to be applied):
 
   call SetUpLinters()
   call ale#events#SaveEvent(bufnr(''))
+  call ale#test#FlushJobs()
 
   Assert !filereadable('fix_test_file'), 'The file should not have been saved'
 
@@ -552,6 +556,7 @@ Execute(ALEFix should still lint when nothing was fixed on save):
 
   call SetUpLinters()
   call ale#events#SaveEvent(bufnr(''))
+  call ale#test#FlushJobs()
 
   Assert !filereadable('fix_test_file'), 'The file should not have been saved'
 

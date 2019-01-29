@@ -187,3 +187,103 @@ function! ale#command#FormatCommand(buffer, executable, command, pipe_file_if_ne
 
     return [l:temporary_file, l:command, l:file_created]
 endfunction
+
+function! s:GatherOutput(line_list, job_id, line) abort
+    call add(a:line_list, a:line)
+endfunction
+
+function! s:ExitCallback(buffer, line_list, Callback, data) abort
+    if g:ale_history_enabled
+        call ale#history#SetExitCode(a:buffer, a:data.job_id, a:data.exit_code)
+
+        " Log the output of the command for ALEInfo if we should.
+        if g:ale_history_log_output
+            call ale#history#RememberOutput(
+            \   a:buffer,
+            \   a:data.job_id,
+            \   a:line_list[:]
+            \)
+        endif
+    endif
+
+    call a:Callback(a:buffer, a:line_list, a:data)
+endfunction
+
+function! ale#command#Run(buffer, command, options) abort
+    let l:Callback = a:options.callback
+    let l:output_stream = get(a:options, 'output_stream', 'stdout')
+    let l:line_list = []
+
+    let [l:temporary_file, l:command, l:file_created] = ale#command#FormatCommand(
+    \   a:buffer,
+    \   get(a:options, 'executable', ''),
+    \   a:command,
+    \   get(a:options, 'read_buffer', 0),
+    \   get(a:options, 'input', v:null),
+    \)
+    let l:command = ale#job#PrepareCommand(a:buffer, l:command)
+    let l:job_options = {
+    \   'exit_cb': {job_id, exit_code -> s:ExitCallback(
+    \       a:buffer,
+    \       l:line_list,
+    \       l:Callback,
+    \       {
+    \           'job_id': job_id,
+    \           'exit_code': exit_code,
+    \           'temporary_file': l:temporary_file,
+    \       }
+    \   )},
+    \   'mode': 'nl',
+    \}
+
+    if l:output_stream is# 'stdout'
+        let l:job_options.out_cb = function('s:GatherOutput', [l:line_list])
+    elseif l:output_stream is# 'stderr'
+        let l:job_options.err_cb = function('s:GatherOutput', [l:line_list])
+    elseif l:output_stream is# 'both'
+        let l:job_options.out_cb = function('s:GatherOutput', [l:line_list])
+        let l:job_options.err_cb = function('s:GatherOutput', [l:line_list])
+    endif
+
+    let l:status = 'failed'
+
+    if get(g:, 'ale_run_synchronously') == 1
+        if get(g:, 'ale_emulate_job_failure') == 1
+            let l:job_id = 0
+        else
+            " Generate a fake job ID for tests.
+            let s:fake_job_id = get(s:, 'fake_job_id', 0) + 1
+            let l:job_id = s:fake_job_id
+        endif
+    else
+        let l:job_id = ale#job#Start(l:command, l:job_options)
+    endif
+
+    if l:job_id
+        let l:status = 'started'
+    endif
+
+    if g:ale_history_enabled
+        call ale#history#Add(a:buffer, l:status, l:job_id, l:command)
+    endif
+
+    if get(g:, 'ale_run_synchronously') == 1 && l:job_id
+        " Run a command synchronously if this test option is set.
+        call extend(l:line_list, systemlist(
+        \   type(l:command) is v:t_list
+        \       ? join(l:command[0:1]) . ' ' . ale#Escape(l:command[2])
+        \       : l:command
+        \))
+
+        if !exists('g:ale_run_synchronously_callbacks')
+            let g:ale_run_synchronously_callbacks = []
+        endif
+
+        call add(
+        \   g:ale_run_synchronously_callbacks,
+        \   {-> l:job_options.exit_cb(l:job_id, v:shell_error)}
+        \)
+    endif
+
+    return l:job_id
+endfunction
