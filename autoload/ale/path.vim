@@ -38,10 +38,13 @@ function! ale#path#FindNearestFile(buffer, filename) abort
     let l:buffer_filename = fnamemodify(bufname(a:buffer), ':p')
     let l:buffer_filename = fnameescape(l:buffer_filename)
 
-    let l:relative_path = findfile(a:filename, l:buffer_filename . ';')
+    let l:file_path = findfile(a:filename, l:buffer_filename . ';')
 
-    if !empty(l:relative_path)
-        return fnamemodify(l:relative_path, ':p')
+    if !empty(l:file_path)
+        " Note: findfile() return value is relative to CWD, if below CWD.
+        " Note: fnamemodify(:p) resolves symlinks, which is not desirable here.
+        " https://groups.google.com/g/vim_use/c/YCuWzVRB-wM/m/X0r6TlyAY70J
+        return ale#path#GetAbsPath(getcwd(), l:file_path)   " no-custom-checks
     endif
 
     return ''
@@ -53,10 +56,13 @@ function! ale#path#FindNearestDirectory(buffer, directory_name) abort
     let l:buffer_filename = fnamemodify(bufname(a:buffer), ':p')
     let l:buffer_filename = fnameescape(l:buffer_filename)
 
-    let l:relative_path = finddir(a:directory_name, l:buffer_filename . ';')
+    let l:dir_path = finddir(a:directory_name, l:buffer_filename . ';')
 
-    if !empty(l:relative_path)
-        return fnamemodify(l:relative_path, ':p')
+    if !empty(l:dir_path)
+        " Note: finddir() return value is relative to CWD, if below CWD.
+        " Note: fnamemodify(:p) resolves symlinks, which is not desirable here.
+        " https://groups.google.com/g/vim_use/c/YCuWzVRB-wM/m/X0r6TlyAY70J
+        return ale#path#GetAbsPath(getcwd(), l:dir_path)    " no-custom-checks
     endif
 
     return ''
